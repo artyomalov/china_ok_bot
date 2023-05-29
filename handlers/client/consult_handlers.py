@@ -1,7 +1,7 @@
 from aiogram import types
 from aiogram.dispatcher import Dispatcher
 from keyboards.consult_keyboards import kb_consult, kb_consult_order
-from texts import LOREM
+from const import LOREM
 
 
 # BASE CONSULT HANDLER

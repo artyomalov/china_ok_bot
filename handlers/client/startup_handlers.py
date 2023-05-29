@@ -1,8 +1,7 @@
 from aiogram import types
 from aiogram.dispatcher import Dispatcher
-from texts import LOREM
+from const import LOREM
 from keyboards.startup_keyboard import kb_on_start
-
 async def on_start_handler(message: types.Message):
     '''
         Handler runs after '/start' command has been executed. Resurns three keyboard buttons: 'консультации', 'каталоги,' 'заявки'.

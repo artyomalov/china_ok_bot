@@ -1,1 +1,0 @@
-LOREM = 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Amet debitis deleniti aperiam architecto. Incidunt tempora eaque distinctio delectus, harum vero iusto, velit nostrum minima, expedita minus dolor voluptatum voluptates sequi.'

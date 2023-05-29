@@ -1,0 +1,2 @@
+LOREM = 'Lorem ipsum dolor sit amet consectetur adipisicing elit. Amet debitis deleniti aperiam architecto. Incidunt tempora eaque distinctio delectus, harum vero iusto, velit nostrum minima, expedita minus dolor voluptatum voluptates sequi.'
+ALLOWED_PHONE_NUMBER_SYMBOLS = {'1','2','3','4','5','6','7','8','9','0','(',')','+'}
