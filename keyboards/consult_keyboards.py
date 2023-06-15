@@ -7,8 +7,10 @@ button_base_consult = types.InlineKeyboardButton(
 button_product_selection_consult = types.InlineKeyboardButton(
     text='Подбор товара', callback_data='product_selection_callback')
 
-kb_consult = types.InlineKeyboardMarkup(row_width=2)
-kb_consult.add(button_base_consult, button_product_selection_consult)
+buttons_consult = [[button_base_consult], [button_product_selection_consult]]
+
+kb_consult = types.InlineKeyboardMarkup(
+    inline_keyboard=buttons_consult)
 
 
 # BASE CONSULT ORDER BUTTON
@@ -16,5 +18,5 @@ button_consult_order = types.InlineKeyboardButton(
     text='Заказать', callback_data='order_consult_callback')
 
 
-kb_consult_order = types.InlineKeyboardMarkup(row_width=1)
-kb_consult_order.add(button_consult_order)
+kb_consult_order = types.InlineKeyboardMarkup(
+    inline_keyboard=[[button_consult_order]])

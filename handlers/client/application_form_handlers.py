@@ -1,22 +1,29 @@
 from aiogram import types
-from aiogram.dispatcher import Dispatcher, FSMContext
+from aiogram import Router
+from aiogram.filters import Command, Text
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime
 from aiogram.utils.markdown import text, bold
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from keyboards import application_form_keyboards
+from keyboards import application_form_keyboards, startup_keyboard
 from const import ALLOWED_PHONE_NUMBER_SYMBOLS, LOREM
-from servises.return_user_answers_service import return_user_answers
-from servises.run_startup_service import run_startup
+from servises.set_additional_data_service import set_additional_data_service
 from keyboards.startup_keyboard import kb_on_start
+from google_sheets_connect import cursor
+from config_reader import config
+from db.models import ApplicationFormUserData
+form_router = Router()
 
-# SEND APPLICATION FROM'S INFO HANDLER
 
-
+@form_router.message(Command('Заявки'))
 async def send_application_form_info_handler(message: types.Message):
     '''
         Returns application form description and one inline button. Button's text is "Заказать"
     '''
     msg = text(bold("Заполнение заявки и зачем это нужно"), LOREM, sep='\n')
-    await message.answer(text=msg, reply_markup=application_form_keyboards.kb_application_form, parse_mode=types.ParseMode.MARKDOWN)
+    await message.answer(text=msg, reply_markup=application_form_keyboards.kb_application_form)
     await message.delete()
 
 
@@ -37,25 +44,42 @@ class FSMForm(StatesGroup):
 CANCEL_MESSAGE = 'Вы прервали заполнение формы. Если Вы хотиту начать заполнение заново нажмите на кнопку ниже, так же Вы можете заказать консультацию или подписаться на рассылку'
 
 
-async def cancel_fsm(callback: types.CallbackQuery, state: FSMContext):
+@form_router.callback_query(Text('cancel_fsm'))
+async def cancel_fsm(callback: types.CallbackQuery, state: FSMContext) -> None:
     current_state = await state.get_state()
     if current_state is not None:
-        await state.reset_state()
-        await state.finish()
+        await state.clear()
         await callback.message.answer(text=CANCEL_MESSAGE, reply_markup=application_form_keyboards.kb_cancel_application_form_restart)
         await callback.answer()
         return
-    await state.finish()
+    await state.clear()
     await callback.message.answer(text=CANCEL_MESSAGE, reply_markup=application_form_keyboards.kb_cancel_application_form_restart)
     await callback.answer()
 
 
+@form_router.callback_query(Text('restart_main_menu'))
 async def restart_main_menu(callback: types.CallbackQuery):
     await callback.message.answer(text='OK', reply_markup=kb_on_start)
     await callback.answer()
 
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-async def start_fill_form_callback_fsm(callback: types.CallbackQuery, state: FSMContext):
+
+
+
+@form_router.callback_query(Text('button_fill_application_form'))
+async def start_fill_form_callback_fsm(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+    today = datetime.date.today()
+    # diff = someday - today
+    # diff.days
+    async with session:
+        request = select(ApplicationFormUserData).filter_by(
+            id=callback.message.from_user.id)
+        user_request = await session.execute(request)
+        user = user_request.scalar()
+        # user.дата которую нужно добавить в таблицу
+        if user != None or user:
+            await callback.message.answer(text='Вы заполнили масимальное число заявок на сегодня')
     await callback.message.answer('Пожалуйста, укажите имя', reply_markup=application_form_keyboards.kb_auto_set_name)
     await state.set_state(FSMForm.name)
     await callback.answer()
@@ -64,6 +88,7 @@ async def start_fill_form_callback_fsm(callback: types.CallbackQuery, state: FSM
 ASK_PHONE_NUMBER_MESSAGE = 'Спасибо! Теперь, пожалуйста укажите номер телефона'
 
 
+@form_router.callback_query(FSMForm.name, Text('button_auto_set_name'))
 async def auto_set_name_callback_fsm(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(name=callback.from_user.full_name)
     await callback.message.answer(ASK_PHONE_NUMBER_MESSAGE, reply_markup=application_form_keyboards.kb_cancel)
@@ -71,12 +96,14 @@ async def auto_set_name_callback_fsm(callback: types.CallbackQuery, state: FSMCo
     await state.set_state(FSMForm.phone_number)
 
 
+@form_router.message(FSMForm.name)
 async def set_name_fsm(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
     await message.answer(ASK_PHONE_NUMBER_MESSAGE, reply_markup=application_form_keyboards.kb_cancel)
     await state.set_state(FSMForm.phone_number)
 
 
+@form_router.message(FSMForm.phone_number)
 async def set_phone_number_fsm(message: types.Message, state: FSMContext):
     if set(message.text).issubset(ALLOWED_PHONE_NUMBER_SYMBOLS) or set(message.text) == ALLOWED_PHONE_NUMBER_SYMBOLS:
         await state.update_data(phone_number=message.text)
@@ -86,134 +113,130 @@ async def set_phone_number_fsm(message: types.Message, state: FSMContext):
         await message.answer('номер телефона может состоять из цифр "0-9", круглых скобок() и знака "+"')
 
 
+@form_router.message(FSMForm.product_name)
 async def set_product_name_fsm(message: types.Message, state: FSMContext):
     await state.update_data(product_name=message.text)
-    await message.answer('Спасибо! Теперь, пожалуйста, прикрепите первую фотографию товара(1/3), либо нажмите на кнопку "пропустить", что бы пропустить добавление фотографий', reply_markup=application_form_keyboards.kb_skip_three_photo_upload)
+    await message.answer(text='Спасибо! Теперь, пожалуйста, прикрепите первую фотографию товара(1/3), либо нажмите на кнопку "пропустить", что бы пропустить добавление фотографий', reply_markup=application_form_keyboards.kb_skip_three_photo_upload)
     await state.set_state(FSMForm.product_photo_one)
 
 
+@form_router.callback_query(FSMForm.product_photo_one, Text(startswith='skip'))
+async def skip_add_all_photo_handler(callback: types.CallbackQuery, state: FSMContext):
+
+    if callback.data == 'skip_three':
+        await state.update_data(product_photo_one=NOT_SET)
+        await state.set_state(FSMForm.product_photo_two)
+        await state.update_data(product_photo_two=NOT_SET)
+        await state.set_state(FSMForm.product_photo_three)
+        await state.update_data(product_photo_three=NOT_SET)
+    if callback.data == 'skip_two':
+        await state.set_state(FSMForm.product_photo_two)
+        await state.update_data(product_photo_two=NOT_SET)
+        await state.set_state(FSMForm.product_photo_three)
+        await state.update_data(product_photo_three=NOT_SET)
+    if callback.data == 'skip_one':
+        await state.set_state(FSMForm.product_photo_three)
+        await state.update_data(product_photo_three=NOT_SET)
+
+    await callback.message.answer(CHINESE_SOURSE_REQUEST, reply_markup=application_form_keyboards.kb_cancel)
+    await callback.answer()
+    await state.set_state(FSMForm.chinese_source_link)
+
+
+@form_router.message(FSMForm.product_photo_one)
 async def upload_product_photo_one_fsm(message: types.Message, state: FSMContext):
     await state.update_data(product_photo_one=message.photo[0].file_id)
-    await message.answer('Спасибо! Теперь, пожалуйста, загрузите вторую фотографию товара(2/3) либо нажмите на конпку "пропустить", если Вы больше не хотите добавлять фотографии', reply_markup=application_form_keyboards.kb_skip_two_photo_upload)
+    await message.answer(text='Спасибо! Теперь, пожалуйста, загрузите вторую фотографию товара(2/3) либо нажмите на конпку "пропустить", если Вы больше не хотите добавлять фотографии', reply_markup=application_form_keyboards.kb_skip_two_photo_upload)
     await state.set_state(FSMForm.product_photo_two)
 
 
+@form_router.message(FSMForm.product_photo_two)
 async def upload_product_photo_two_fsm(message: types.Message, state: FSMContext):
     await state.update_data(product_photo_two=message.photo[0].file_id)
-    await message.answer('Спасибо! Теперь, пожалуйста, загрузите третью фотографию товара(3/3) либо нажмите на конпку "пропустить", если Вы больше не хотите добавлять фотографии', reply_markup=application_form_keyboards.kb_skip_one_photo_upload)
+    await message.answer(text='Спасибо! Теперь, пожалуйста, загрузите третью фотографию товара(3/3) либо нажмите на конпку "пропустить", если Вы больше не хотите добавлять фотографии', reply_markup=application_form_keyboards.kb_skip_one_photo_upload)
     await state.set_state(FSMForm.product_photo_three)
 
 NOT_SET = 'Not set'
 CHINESE_SOURSE_REQUEST = 'Пожалуйста, прикрепите ссылку на китайский источник'
 
 
-async def skip_add_all_photo_handler(callback: types.CallbackQuery, state: FSMContext):
-    if callback.data == 'skip_three':
-        async with state.proxy() as data:
-            data['product_photo_one'] = NOT_SET
-            data['product_photo_two'] = NOT_SET
-            data['product_photo_whree'] = NOT_SET
-    if callback.data == 'skip_two':
-        async with state.proxy() as data:
-            data['product_photo_two'] = NOT_SET
-            data['product_photo_whree'] = NOT_SET
-    if callback.data == 'skip_one':
-        async with state.proxy() as data:
-            data['product_photo_whree'] = NOT_SET
-    await callback.message.answer(CHINESE_SOURSE_REQUEST, reply_markup=application_form_keyboards.kb_cancel)
-    await callback.answer()
-    await state.set_state(FSMForm.chinese_source_link)
-
-
+@form_router.message(FSMForm.product_photo_three)
 async def upload_product_photo_three_fsm(message: types.Message, state: FSMContext):
     await state.update_data(product_photo_three=message.photo[0].file_id)
-    await message.answer(CHINESE_SOURSE_REQUESTreply_markup=application_form_keyboards.kb_cancel)
+    await message.answer(text=CHINESE_SOURSE_REQUEST, reply_markup=application_form_keyboards.kb_cancel)
     await state.set_state(FSMForm.chinese_source_link)
 
 
+@form_router.message(FSMForm.chinese_source_link)
 async def set_chinese_source_link_fsm(message: types.Message, state: FSMContext):
-    await state.update_data(chinese_source_link=message.text)
-    await message.answer('Пожалуйста, укажите, нужно ли брендирование', reply_markup=application_form_keyboards.kb_need_branding)
-    await state.set_state(FSMForm.need_branding)
+    user_text = message.text
+    if user_text.startswith('https://') or user_text.startswith('www'):
+        await state.update_data(chinese_source_link=message.text)
+        await message.answer(text='Пожалуйста, укажите, нужно ли брендирование', reply_markup=application_form_keyboards.kb_need_branding)
+        await state.set_state(FSMForm.need_branding)
+    else:
+        await message.answer(text='Пожалуйста укажите ссылку на сайт. Ссылка может начинаться с "https://" или c "www"')
 
 
+@form_router.callback_query(FSMForm.need_branding, Text(startswith='need_branding'))
 async def set_has_branding_fsm(callback: types.CallbackQuery, state: FSMContext):
+    await state.update_data(need_branding='Брендирование нужно')
     if callback.data == "need_branding_yes":
         await state.update_data(need_branding='Брендирование нужно')
     else:
         await state.update_data(need_branding='Брендирование не нужно')
-    await callback.message.answer("Пожалуйста, укажите предполагаемый объём", reply_markup=application_form_keyboards.kb_cancel)
+    await callback.message.answer(text="Пожалуйста, укажите предполагаемый объём", reply_markup=application_form_keyboards.kb_cancel)
     await state.set_state(FSMForm.assumed_volume)
     await callback.answer()
 
 
+@form_router.message(FSMForm.assumed_volume)
 async def set_assumed_volume_fsm(message: types.Message, state: FSMContext):
     await state.update_data(assumed_volume=message.text)
-    await message.answer('Пожалуйста укажите предполагаемый бюджет', reply_markup=application_form_keyboards.kb_cancel)
+    await message.answer(text='Пожалуйста укажите предполагаемый бюджет', reply_markup=application_form_keyboards.kb_cancel)
     await state.set_state(FSMForm.assumed_budget)
 
 
+@form_router.message(FSMForm.assumed_budget)
 async def set_assumed_budget_fsm(message: types.Message, state: FSMContext):
     await state.update_data(assumed_budget=message.text)
-    await message.answer('Если есть какая-либо информация, которую Вы хотели бы добавить, пожалуйста, нажмите кнопку "Пропустить"', reply_markup=application_form_keyboards.kb_skip_additional_data)
+    await message.answer(text='Если есть какая-либо информация, которую Вы хотели бы добавить, пожалйуста укажите её, если же такой информации\
+                          нет, пожалуйста, нажмите кнопку "Пропустить"', reply_markup=application_form_keyboards.kb_skip_additional_data)
     await state.set_state(FSMForm.additional_data)
 
-ANSWERS_CHECK_REQUESTS = 'Спасибо за заполнение формы. Пожалуйста проверьте свои ответы'
 
-
+@form_router.callback_query(FSMForm.additional_data, Text('skip_aditional_requests'))
 async def skip_addittional_info_fsm(callback: types.CallbackQuery, state: FSMContext):
-    await state.update_data(additional_data='Дополнительная информация не указана')
-    await callback.message.answer(ANSWERS_CHECK_REQUESTS)
-    async with state.proxy() as data:
-        await return_user_answers(data, callback.message)
-    await state.finish()
+    await set_additional_data_service(message=callback.message,
+                                      state=state,
+                                      additional_data_text='Дополнительная информация не указана',
+                                      keyboard=application_form_keyboards.kb_send_data_google_sheets)
     await callback.answer()
 
 
+@form_router.message(FSMForm.additional_data)
 async def set_additional_data(message: types.Message, state: FSMContext):
-    await state.update_data(additional_data=message.text)
-    await message.answer(ANSWERS_CHECK_REQUESTS)
-    async with state.proxy() as data:
-        await return_user_answers(data, message)
-    await state.finish()
+    await set_additional_data_service(message=message,
+                                      state=state,
+                                      additional_data_text=message.text,
+                                      keyboard=application_form_keyboards.kb_send_data_google_sheets)
 
 
-def register_handlers_form_info(dp: Dispatcher):
-    dp.register_message_handler(
-        send_application_form_info_handler, commands=['Заявки']
-    )
-    dp.register_callback_query_handler(
-        cancel_fsm, lambda callback: callback.data == 'cancel_fsm', state="*")
+@form_router.callback_query(Text('send'))
+async def send_data_to_google_sheets(callback: types.CallbackQuery, state: FSMContext):
+    time = datetime.today().strftime('%Y-%m-%d').replace('-', '/')
+    data = await state.get_data()
+    user_info_list = [item for item in data.values()]
+    send_data = [[time] + user_info_list]
+    cursor.append(
+        spreadsheetId=config.sample_spreadsheet_id.get_secret_value(),
+        range='sales!A1:L1',
+        valueInputOption='USER_ENTERED',
+        insertDataOption='INSERT_ROWS',
+        body={'values': send_data}
+    ).execute()
 
-    dp.register_callback_query_handler(
-        restart_main_menu, lambda callback: callback.data == 'restart_main_menu')
-
-    dp.register_callback_query_handler(
-        start_fill_form_callback_fsm, lambda callback: callback.data == 'button_fill_application_form')
-    dp.register_callback_query_handler(
-        auto_set_name_callback_fsm, lambda callback: callback.data == 'button_auto_set_name', state=FSMForm.name)
-    dp.register_message_handler(set_name_fsm, state=FSMForm.name)
-    dp.register_message_handler(
-        set_phone_number_fsm, state=FSMForm.phone_number)
-    dp.register_message_handler(
-        set_product_name_fsm, state=FSMForm.product_name)
-    dp.register_callback_query_handler(
-        skip_add_all_photo_handler, lambda callback: callback.data and callback.data.startswith('skip'), state=[FSMForm.product_photo_one, FSMForm.product_photo_two, FSMForm.product_photo_three])
-    dp.register_message_handler(
-        upload_product_photo_one_fsm, state=FSMForm.product_photo_one, content_types=types.ContentTypes.PHOTO)
-    dp.register_message_handler(
-        upload_product_photo_two_fsm, state=FSMForm.product_photo_two, content_types=types.ContentTypes.PHOTO)
-    dp.register_message_handler(upload_product_photo_three_fsm,
-                                state=FSMForm.product_photo_three, content_types=types.ContentTypes.PHOTO)
-    dp.register_message_handler(
-        set_chinese_source_link_fsm, state=FSMForm.chinese_source_link)
-    dp.register_callback_query_handler(
-        set_has_branding_fsm, lambda callback: callback.data and callback.data.startswith('need'), state=FSMForm.need_branding)
-    dp.register_message_handler(
-        set_assumed_volume_fsm, state=FSMForm.assumed_volume)
-    dp.register_message_handler(
-        set_assumed_budget_fsm, state=FSMForm.assumed_budget)
-    dp.register_callback_query_handler(skip_addittional_info_fsm, lambda callback: callback.data ==
-                                       'skip_aditional_requests', state=FSMForm.additional_data)
-    dp.register_message_handler(
-        set_additional_data, state=FSMForm.additional_data)
+    await state.clear()
+    await callback.message.answer(text='Спасибо за заполнение заявки. Мы свяжемся с Вами в течение часа',
+                                  reply_markup=startup_keyboard.kb_on_start)
+    await callback.answer()

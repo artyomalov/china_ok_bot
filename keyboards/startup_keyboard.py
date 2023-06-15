@@ -1,9 +1,9 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-button_consult = KeyboardButton('/Консультации')
-button_catalogs = KeyboardButton('/Каталоги')
-button_application_form = KeyboardButton('/Заявки')
-kb_on_start = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=False)
+button_consult = KeyboardButton(text='/Консультации')
+button_catalogs = KeyboardButton(text='/Каталоги')
+button_application_form = KeyboardButton(text='/Заявки')
 
-
-kb_on_start.row(button_consult, button_catalogs, button_application_form)
+kb = [[button_consult], [button_catalogs], [button_application_form]]
+kb_on_start = ReplyKeyboardMarkup(
+    resize_keyboard=True, one_time_keyboard=False, keyboard=kb)
