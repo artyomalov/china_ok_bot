@@ -3,9 +3,9 @@ from aiogram import Router
 from aiogram.filters import Command, Text
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from sqlalchemy import select
+from sqlalchemy import select, insert, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
+from datetime import datetime, timedelta
 from aiogram.utils.markdown import text, bold
 from keyboards import application_form_keyboards, startup_keyboard
 from const import ALLOWED_PHONE_NUMBER_SYMBOLS, LOREM
@@ -65,21 +65,30 @@ async def restart_main_menu(callback: types.CallbackQuery):
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-
-
 @form_router.callback_query(Text('button_fill_application_form'))
 async def start_fill_form_callback_fsm(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
-    today = datetime.date.today()
-    # diff = someday - today
-    # diff.days
-    async with session:
-        request = select(ApplicationFormUserData).filter_by(
-            id=callback.message.from_user.id)
-        user_request = await session.execute(request)
-        user = user_request.scalar()
-        # user.дата которую нужно добавить в таблицу
-        if user != None or user:
+    id = callback.message.from_user.id
+    request = select(ApplicationFormUserData).filter_by(
+        user_id=id)
+    user_request = await session.execute(request)
+    user = user_request.scalar()
+    # ОТТЕСТИРОВАТЬ ВРЕМЯ И ДАТУ.
+    if user != None:
+        one_day_gone = True if (
+            datetime.today().date() - user.fill_form_date) > timedelta(days=1) else False
+        if (not one_day_gone and user.filled_form_count >= 3):
             await callback.message.answer(text='Вы заполнили масимальное число заявок на сегодня')
+            await state.clear()
+            return
+        if (not one_day_gone and user.filled_form_count < 3):
+            await callback.message.answer('Пожалуйста, укажите имя', reply_markup=application_form_keyboards.kb_auto_set_name)
+            await state.set_state(FSMForm.name)
+            await callback.answer()
+            return
+        if (one_day_gone):
+            query = delete(ApplicationFormUserData).filter_by(user_id=id)
+            await session.execute(query)
+            await session.commit()
     await callback.message.answer('Пожалуйста, укажите имя', reply_markup=application_form_keyboards.kb_auto_set_name)
     await state.set_state(FSMForm.name)
     await callback.answer()
@@ -223,7 +232,8 @@ async def set_additional_data(message: types.Message, state: FSMContext):
 
 
 @form_router.callback_query(Text('send'))
-async def send_data_to_google_sheets(callback: types.CallbackQuery, state: FSMContext):
+async def send_data_to_google_sheets(callback: types.CallbackQuery, state: FSMContext, session: AsyncSession):
+    id = callback.message.from_user.id
     time = datetime.today().strftime('%Y-%m-%d').replace('-', '/')
     data = await state.get_data()
     user_info_list = [item for item in data.values()]
@@ -235,7 +245,27 @@ async def send_data_to_google_sheets(callback: types.CallbackQuery, state: FSMCo
         insertDataOption='INSERT_ROWS',
         body={'values': send_data}
     ).execute()
-
+    request = select(ApplicationFormUserData).filter_by(
+        user_id=id)
+    user_request = await session.execute(request)
+    user = user_request.scalar()
+    if user is not None:
+        query = update(ApplicationFormUserData).filter_by(
+            user_id=id).values(filled_form_count=user.filled_form_count+1)
+        await session.execute(query)
+        await session.commit()
+        await state.clear()
+        await callback.message.answer(text='Спасибо за заполнение заявки. Мы свяжемся с Вами в течение часа',
+                                      reply_markup=startup_keyboard.kb_on_start)
+        await callback.answer()
+        return
+    print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+    await session.execute(insert(ApplicationFormUserData), [{'user_id': id,
+                                                             'name': data['name'],
+                                                             'phone_number':data['phone_number'],
+                                                             'filled_form_count': 1
+                                                             }])
+    await session.commit()
     await state.clear()
     await callback.message.answer(text='Спасибо за заполнение заявки. Мы свяжемся с Вами в течение часа',
                                   reply_markup=startup_keyboard.kb_on_start)
