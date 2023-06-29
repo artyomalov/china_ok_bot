@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from db.base import Base
 from config_reader import config as bot_config
+from db.base import Base
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -27,6 +28,7 @@ config.set_main_option(
     'sqlalchemy.url',
     bot_config.db_url
 )
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")

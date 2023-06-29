@@ -1,23 +1,14 @@
 from aiogram import types
+from .common_keyboards import button_cancel
 
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Fill form
 button_fill_application_form = types.InlineKeyboardButton(
     text='Заполнить заявку', callback_data='button_fill_application_form')
-button_restart_startup_menu = types.InlineKeyboardButton(
-    text='Главное меню', callback_data='restart_main_menu')
+
 
 kb_application_form = types.InlineKeyboardMarkup(
     inline_keyboard=[[button_fill_application_form]])
-kb_cancel_application_form_restart = types.InlineKeyboardMarkup(
-    inline_keyboard=[[button_restart_startup_menu]])
-
-
-# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Cancel fill form
-button_cancel = types.InlineKeyboardButton(
-    text='Отмена', callback_data='cancel_fsm')
-
-kb_cancel = types.InlineKeyboardMarkup(inline_keyboard=[[button_cancel]])
 
 
 # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Auto set name
@@ -54,20 +45,10 @@ kb_need_branding = types.InlineKeyboardMarkup(
     inline_keyboard=buttons_need_branding)
 
 
-# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Skip adittional requests
 button_skip_aditional_data = types.InlineKeyboardButton(
-    text='Пропустить', callback_data='skip_aditional_requests')
+    text='Пропустить', callback_data='dont_add_aditional_requests')
 
 buttons_skip_additional_data = [[button_skip_aditional_data], [button_cancel]]
 
 kb_skip_additional_data = types.InlineKeyboardMarkup(
     inline_keyboard=buttons_skip_additional_data)
-
-
-button_send = types.InlineKeyboardButton(
-    text='Отправить', callback_data='send')
-
-buttons_send = [[button_send], [button_cancel]]
-
-kb_send_data_google_sheets = types.InlineKeyboardMarkup(
-    inline_keyboard=buttons_send)
