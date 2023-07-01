@@ -1,19 +1,15 @@
 import time
+import texts
 from aiogram import types, Bot, F
 from aiogram import Router
 from aiogram.filters import Text
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
-from aiogram.utils.markdown import text, bold
 from keyboards import application_form_keyboards
-from const import ALLOWED_PHONE_NUMBER_SYMBOLS, LOREM
-from servises.check_data_service import check_data_service
-from servises.cancel_fsm_service import cancel_fill_form_service
+from const import ALLOWED_PHONE_NUMBER_SYMBOLS
 from servises.count_rest_time_service import count_rest_time_service
-from servises.error_service import error_service
 from servises.get_time_service import get_time
-from keyboards.startup_keyboard import kb_on_start
 from google_sheets_connect import add_data_to_gsheets
 from db.models import ApplicationFormUserData
 from keyboards.common_keyboards import kb_cancel, kb_send_data, \
@@ -22,6 +18,9 @@ from db.db_actions import add_new_user_to_db, delete_user_from_db, get_db_user,\
     update_user_fill_form_count
 from servises.select_kb_service import select_kb_service
 from servises.convert_id_to_url_service import convert_id_to_url_service
+from servises.check_data_service import check_data_service
+from servises.cancel_fsm_service import cancel_fill_form_service
+from servises.error_service import error_service
 
 
 form_router = Router()
@@ -47,9 +46,8 @@ async def send_application_form_info_handler(message: types.Message):
         Returns application form description and one inline button.
         Button's text is "Заказать"
     '''
-    msg = text(bold("Заполнение заявки и зачем это нужно"), LOREM, sep='\n')
     await message.answer(
-        text=msg,
+        text=texts.APPLICATION_FORM_DESCRIPTION,
         reply_markup=application_form_keyboards.kb_application_form)
     await message.delete()
 
@@ -63,9 +61,22 @@ async def cancel_fsm(callback: types.CallbackQuery, state: FSMContext) -> None:
 
 
 @form_router.callback_query(Text('restart_main_menu'))
-async def restart_main_menu(callback: types.CallbackQuery):
-    await callback.message.answer(text='OK', reply_markup=kb_on_start)
-    await callback.answer()
+async def restart_main_menu(
+    callback: types.CallbackQuery,
+    session: AsyncSession,
+    bot: Bot
+):
+    try:
+        kb = await select_kb_service(session=session, id=callback.from_user.id)
+        await callback.message.answer(text='OK', reply_markup=kb)
+        await callback.answer()
+    except Exception as error:
+        await error_service(
+            error=error,
+            bot=bot,
+            message=callback.from_user.id,
+            error_location='application_form_handlers - restart_main_menu'
+        )
 
 
 @form_router.callback_query(Text('button_fill_application_form'))
@@ -89,7 +100,7 @@ async def start_fill_form_callback_fsm(
             and is user does not exist at database
             '''
             await callback.message.answer(
-                text='Пожалуйста, укажите имя',
+                text='Пожалуйста, укажите ФИО:',
                 reply_markup=application_form_keyboards.kb_auto_set_name)
             await state.set_state(FSMForm.name)
             await callback.answer()
@@ -129,7 +140,7 @@ async def start_fill_form_callback_fsm(
             error_location='application_form_handlers - start_fill_form_callback_fsm -> '
         )
 
-ASK_PHONE_NUMBER_MESSAGE = 'Спасибо! Теперь, пожалуйста укажите номер телефона'
+ASK_PHONE_NUMBER_MESSAGE = 'Введите контактный номер телефона:'
 
 
 @form_router.callback_query(FSMForm.name, Text('button_auto_set_name'))
@@ -154,7 +165,7 @@ async def set_name_fsm(message: types.Message, state: FSMContext):
 async def set_phone_number_fsm(message: types.Message, state: FSMContext):
     if set(message.text).issubset(ALLOWED_PHONE_NUMBER_SYMBOLS) or set(message.text) == ALLOWED_PHONE_NUMBER_SYMBOLS:
         await state.update_data(phone_number=message.text)
-        await message.answer('Спасибо! Теперь, пожалуйста, укажите название товара', reply_markup=kb_cancel)
+        await message.answer('Наименование интересующего товара:', reply_markup=kb_cancel)
         await state.set_state(FSMForm.product_name)
     else:
         await message.answer('номер телефона может состоять из цифр "0-9", круглых скобок() и знака "+"')
@@ -163,9 +174,8 @@ async def set_phone_number_fsm(message: types.Message, state: FSMContext):
 @form_router.message(FSMForm.product_name)
 async def set_product_name_fsm(message: types.Message, state: FSMContext):
     await state.update_data(product_name=message.text)
-    await message.answer(text='Спасибо! Теперь, пожалуйста, прикрепите первую\
-                               фотографию товара(1/3), либо нажмите на кнопку\
-                               "пропустить", что бы пропустить добавление фотографий',
+    await message.answer(text=texts.REQUEST_PHOTO_DESCRIPTION)
+    await message.answer(text=texts.REQUEST_PHOTO_ONE,
                          reply_markup=application_form_keyboards
                          .kb_skip_three_photo_upload)
     await state.set_state(FSMForm.product_photo_one)
@@ -198,9 +208,7 @@ async def upload_product_photo_one_fsm(
     url['image_type'] = image_type
     await state.update_data(product_photo_one=url)
 
-    await message.answer(text='Спасибо! Теперь, пожалуйста, загрузите вторую\
-                          фотографию товара(2/3) либо нажмите на конпку\
-                          "пропустить", если Вы больше не хотите добавлять фотографии',
+    await message.answer(text=texts.REQUEST_PHOTO_TWO,
                          reply_markup=application_form_keyboards
                          .kb_skip_two_photo_upload)
 
@@ -228,7 +236,7 @@ async def skip_add_photo_handler(callback: types.CallbackQuery,
         await state.update_data(product_photo_three=NOT_SET)
 
     await callback.message.answer(
-        text=CHINESE_SOURSE_REQUEST,
+        text=texts.CHINESE_SOURSE_REQUEST,
         reply_markup=kb_cancel)
     await state.set_state(FSMForm.chinese_source_link)
     await callback.answer()
@@ -247,16 +255,11 @@ async def upload_product_photo_two_fsm(
     url = await convert_id_to_url_service(bot=bot, file_id=id)
     url['image_type'] = image_type
     await state.update_data(product_photo_two=url)
-    await message.answer(text='Спасибо! Теперь, пожалуйста, загрузите третью\
-                          фотографию товара(3/3) либо нажмите на конпку\
-                          "пропустить", если Вы больше не хотите добавлять фотографии',
+    await message.answer(text=texts.REQUEST_PHOTO_THREE,
                          reply_markup=application_form_keyboards
                          .kb_skip_one_photo_upload)
 
     await state.set_state(FSMForm.product_photo_three)
-
-
-CHINESE_SOURSE_REQUEST = 'Пожалуйста, прикрепите ссылку на китайский источник'
 
 
 @form_router.message(FSMForm.product_photo_three)
@@ -272,7 +275,10 @@ async def upload_product_photo_three_fsm(
     url = await convert_id_to_url_service(bot=bot, file_id=id)
     url['image_type'] = image_type
     await state.update_data(product_photo_three=url)
-    await message.answer(text=CHINESE_SOURSE_REQUEST, reply_markup=kb_cancel)
+    await message.answer(text=texts.CHINESE_SOURSE_REQUEST,
+                         reply_markup=kb_cancel,
+                         disable_web_page_preview=True
+                         )
     await state.set_state(FSMForm.chinese_source_link)
 
 
@@ -285,13 +291,12 @@ async def set_chinese_source_link_fsm(
     if user_text.startswith('https://') or user_text.startswith('www'):
         await state.update_data(chinese_source_link=message.text)
         await message.answer(
-            text='Пожалуйста, укажите, нужно ли брендирование',
+            text=texts.NEED_BRANDING,
             reply_markup=application_form_keyboards.kb_need_branding
         )
         await state.set_state(FSMForm.need_branding)
     else:
-        await message.answer(text='Пожалуйста укажите ссылку на сайт.\
-                             Ссылка может начинаться с "https://" или c "www"')
+        await message.answer(text=texts.CHINESE_SOURSE_REQUEST_ERROR)
 
 
 @form_router.callback_query(
@@ -308,7 +313,7 @@ async def set_has_branding_fsm(
     else:
         await state.update_data(need_branding='Брендирование не нужно')
     await callback.message.answer(
-        text="Пожалуйста, укажите предполагаемый объём",
+        text=texts.ASSUMED_VOLUME_REQUEST,
         reply_markup=kb_cancel
     )
     await state.set_state(FSMForm.assumed_volume)
@@ -322,7 +327,7 @@ async def set_assumed_volume_fsm(
 ):
     await state.update_data(assumed_volume=message.text)
     await message.answer(
-        text='Пожалуйста укажите предполагаемый бюджет',
+        text=texts.ASSUMED_BUDGET_REQUEST,
         reply_markup=kb_cancel
     )
     await state.set_state(FSMForm.assumed_budget)
@@ -335,10 +340,7 @@ async def set_assumed_budget_fsm(
 ):
     await state.update_data(assumed_budget=message.text)
     await message.answer(
-        text='Если есть какая-либо информация, которую Вы \
-                        хотели бы добавить, пожалйуста укажите её,\
-                        если же такой информации нет,\
-                        пожалуйста, нажмите кнопку "Пропустить"',
+        text=texts.ADDITIONAL_INFO_REQUEST,
         reply_markup=application_form_keyboards
         .kb_skip_additional_data
     )
@@ -409,8 +411,7 @@ async def send_data_to_google_sheets(
 
             await state.clear()
             await callback.message.answer(
-                text='Спасибо за заполнение заявки.\
-                    Мы свяжемся с Вами в течение часа',
+                text=texts.FINISH_FILL_FORM_ANSWER,
                 reply_markup=kb)
             await callback.answer()
             return
@@ -430,9 +431,15 @@ async def send_data_to_google_sheets(
 
         await state.clear()
         await callback.message.answer(
-            text='Спасибо за заполнение заявки. \
-                Мы свяжемся с Вами в течение часа',
+            text=texts.FINISH_FILL_FORM_ANSWER,
             reply_markup=kb
+        )
+        await callback.message.answer(
+            text=texts.CONTACT_US,
+            disable_web_page_preview=True,
+        )
+        await callback.message.answer(
+            text=texts.GROUP_PROMOTION
         )
         await callback.answer()
     except Exception as error:

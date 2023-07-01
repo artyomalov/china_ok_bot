@@ -1,3 +1,4 @@
+import texts
 from aiogram import types, Bot
 from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram import Router
@@ -29,10 +30,16 @@ async def on_start_handler(
             id=message.from_user.id
         )
         if user is not None:
-            await message.answer(text=LOREM, reply_markup=kb_on_start_subscribed)
+            await message.answer(
+                text=texts.STARTUP_GREETING_TEXT,
+                reply_markup=kb_on_start_subscribed
+            )
             await message.delete()
         else:
-            await message.answer(text=LOREM, reply_markup=kb_on_start)
+            await message.answer(
+                text=texts.STARTUP_GREETING_TEXT,
+                reply_markup=kb_on_start
+            )
             await message.delete()
     except Exception as error:
         await error_service(

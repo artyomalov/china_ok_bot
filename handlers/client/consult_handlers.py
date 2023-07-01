@@ -1,3 +1,4 @@
+import texts
 from aiogram import types, F, Bot
 from aiogram import Router
 from aiogram.filters import Text
@@ -8,11 +9,9 @@ from keyboards.consult_keyboards import\
     kb_consult,\
     kb_consult_order,\
     kb_pay_consult
-from const import ERROR_MESSAGE, LOREM
 from keyboards.common_keyboards import\
     kb_cancel,\
     kb_cancel_application_form_restart
-from keyboards.startup_keyboard import kb_on_start, kb_on_start_subscribed
 from config_reader import config
 from servises.cancel_fsm_service import cancel_fill_form_service
 from google_sheets_connect import add_data_to_gsheets
@@ -20,6 +19,8 @@ from servises.error_service import error_service
 from servises.get_time_service import get_time
 from servises.send_invoice_service import send_invoice_handler
 from servises.select_kb_service import select_kb_service
+
+
 consult_router = Router()
 
 
@@ -40,9 +41,22 @@ async def cancel_consult_fsm(
 
 
 @consult_router.callback_query(Text('restart_main_menu'))
-async def restart_main_menu(callback: types.CallbackQuery):
-    await callback.message.answer(text='OK', reply_markup=kb_on_start)
-    await callback.answer()
+async def restart_main_menu(
+    callback: types.CallbackQuery,
+    session: AsyncSession,
+    bot: Bot
+):
+    try:
+        kb = await select_kb_service(session=session, id=callback.from_user.id)
+        await callback.message.answer(text='OK', reply_markup=kb)
+        await callback.answer()
+    except Exception as error:
+        await error_service(
+            error=error,
+            bot=bot,
+            message=callback.from_user.id,
+            error_location='consult_handlers - restart_main_menu'
+        )
 
 
 @consult_router.message(Text('Консультации'))
@@ -52,7 +66,7 @@ async def base_consult_handler(message: types.Message):
     button_base_consult, product_selection_consult
     '''
     await message.answer(
-        text=f'Консультации\n{LOREM}',
+        text=texts.CONSULT_DESCRIPTION,
         reply_markup=kb_consult)
     await message.delete()
 
@@ -63,19 +77,30 @@ async def consult_callback(
     callback: types.CallbackQuery,
     state: FSMContext
 ):
-    async def consult_handler(consult_type: str):
+    async def consult_handler(
+        consult_type: str,
+        text: str,
+    ):
         '''
         supporting function needed to simplify code and avoid code duplication
         sets type of FSM.consultation_type(base_consult or product_selection)
         '''
         await state.set_state(FSMFormConsult.consultation_type)
         await state.update_data(consultation_type=consult_type)
-        await callback.message.answer(text=LOREM, reply_markup=kb_consult_order)
+        await callback.message.answer(
+            text=text,
+            reply_markup=kb_consult_order)
         await callback.answer()
     if callback.data == 'consult_select_base_callback':
-        await consult_handler(consult_type='base_consult')
+        await consult_handler(
+            consult_type='base_consult',
+            text=texts.BASE_CONSULT_DESCRIPTION,
+        )
     elif callback.data == 'consult_select_product_selection_callback':
-        await consult_handler(consult_type='product_selection')
+        await consult_handler(
+            consult_type='product_selection',
+            text=texts.PRO_CONSULT_DESCRIPTION,
+        )
     else:
         await callback.message.answer(
             text='Пожалуйста выберете один из указаных вариантов'
@@ -90,7 +115,7 @@ async def get_description_callback_fsm(
 ):
     await state.set_state(FSMFormConsult.question_description)
     await callback.message.answer(
-        text='ПОЖАЛУЙСТА ОИШИТЕ СУТЬ ВОПРОСА',
+        text='Тезисно опишите ваш запрос:',
         reply_markup=kb_cancel
     )
     await callback.answer()
@@ -100,13 +125,7 @@ async def get_description_callback_fsm(
 async def order_consult_fsm(message: types.Message, state: FSMContext):
     await state.update_data(question_description=message.text)
     await message.answer(
-
-        text='Спасибо. Что бы перейти к форме оплаты пожалуйста нажмите\
-              кнопку оплатить. Ответным сообщением Вы получите счёт на\
-              оплату. Вы сможете указать Ваше имя и контактные данные\
-              на этапе оплаты. После успешной оплаты\
-              менеджер свяжется с Вами в течение часа.',
-
+        text=texts.PAY_FOR_CONSULT_MESSAGE,
         reply_markup=kb_pay_consult
     )
 
@@ -155,7 +174,10 @@ async def pre_checkout_query(
     bot: Bot
 ):
 
-    '''get data(name, email, phone number) from payment page'''
+    '''
+    Get data(name, email, phone number) from payment page.
+    Proceed next handler.
+    '''
 
     try:
         data = await state.get_data()

@@ -16,9 +16,5 @@ CANCEL_MESSAGE = 'Вы прервали заполнение формы. Есл�
 ONE_DAY_IN_SECONDS = 86400
 ONE_MONTH_IN_SECONDS = 2592000
 
-
-ERROR_POINTER_RIGHT = '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
-ERROR_POINTER_LEFT = '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'
-
 CHAT_ID = -1001934317046
 ADMIN_ID = 886177470

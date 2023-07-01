@@ -1,38 +1,25 @@
+import texts
 from aiogram import types, Router, Bot, F
 from aiogram.filters import Text
 from sqlalchemy.ext.asyncio import AsyncSession
 from keyboards.catalog_keyboard import kb_subscribe
 from keyboards.startup_keyboard import kb_on_start_subscribed
-from const import CHAT_ID, ERROR_POINTER_RIGHT, ERROR_POINTER_LEFT, LOREM, ERROR_MESSAGE
+from const import CHAT_ID
 from servises.error_service import error_service
 from servises.send_invoice_service import send_invoice_handler
 from config_reader import config
 from db.models import SubscribtionUserData
 from db.db_actions import get_db_user, add_new_user_to_db
-from servises.count_rest_time_service import count_rest_time_service
-
-
+from servises.get_subscribtion_time_service import get_subscribtion_time_service
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 catalog_router = Router()
-
-
-async def get_subscribtion_time(
-    session: AsyncSession,
-    id: int,
-):
-    user: SubscribtionUserData = await get_db_user(
-        model=SubscribtionUserData,
-        session=session,
-        id=id)
-    if user is not None:
-        return count_rest_time_service(user.subscribe_expire_time)
-    else:
-        return None
 
 
 @catalog_router.message(Text('Проверить подписку'))
 async def check_subscription_if_exists(message: types.Message, session: AsyncSession, bot: Bot):
     try:
-        expire_time = await get_subscribtion_time(
+        expire_time = await get_subscribtion_time_service(
             session=session,
             id=message.from_user.id)
         if expire_time != None:
@@ -48,17 +35,17 @@ async def check_subscription_if_exists(message: types.Message, session: AsyncSes
         )
 
 
-@ catalog_router.message(Text(text='Каталоги'))
+@catalog_router.message(Text(text='Каталоги'))
 async def show_catalog_description(message: types.Message):
     '''
     Shows catalog\'s section description and subscribe button
     '''
     await message.answer(
-        text=f'Каталоги \n{LOREM}',
+        text=texts.CATALOG_DESCRIPTION,
         reply_markup=kb_subscribe)
 
 
-@ catalog_router.callback_query(Text(text='subscribe'))
+@catalog_router.callback_query(Text(text='subscribe'))
 async def pay_for_subscribtion(callback: types.CallbackQuery,
                                bot: Bot,
                                session: AsyncSession
@@ -66,14 +53,13 @@ async def pay_for_subscribtion(callback: types.CallbackQuery,
     '''
     Returns invoice to user.
     Invoice placed to separate microservice.
-
     if user already exists invoice will not be send
     '''
 
     provider_token = config.payment_token.get_secret_value(),
     token = f'{provider_token[0]}'
     try:
-        expire_time = await get_subscribtion_time(
+        expire_time = await get_subscribtion_time_service(
             session=session,
             id=callback.from_user.id)
         if expire_time is not None:
@@ -85,7 +71,7 @@ async def pay_for_subscribtion(callback: types.CallbackQuery,
                 callback_chat_id=callback.from_user.id,
                 bot=bot,
                 title='Оплата подписки',
-                description='описание оплаты подписки',
+                description='Оплата месячной подписки',
                 payload='subscription',
                 token=token,
                 label_data='Подписка на месяц',
@@ -101,11 +87,15 @@ async def pay_for_subscribtion(callback: types.CallbackQuery,
         )
 
 
-@ catalog_router.pre_checkout_query(F.invoice_payload == "subscription")
+class FSMCatalog(StatesGroup):
+    new_user = State()
+
+
+@catalog_router.pre_checkout_query(F.invoice_payload == "subscription")
 async def pre_checkout_query_catalog(
         pre_checkout_query: types.PreCheckoutQuery,
         bot: Bot,
-        session: AsyncSession):
+        state: FSMContext):
     try:
         await bot.answer_pre_checkout_query(
             pre_checkout_query_id=pre_checkout_query.id,
@@ -117,14 +107,8 @@ async def pre_checkout_query_catalog(
             'phone_number':  pre_checkout_query.order_info.phone_number,
             'email':  pre_checkout_query.order_info.email,
         }
-
-        await add_new_user_to_db(
-            model=SubscribtionUserData,
-            session=session,
-            user=new_user,
-            bot=bot
-        )
-
+        await state.set_state(FSMCatalog.new_user)
+        await state.update_data(new_user=new_user)
     except Exception as error:
         await error_service(
             error=error,
@@ -133,24 +117,49 @@ async def pre_checkout_query_catalog(
             error_location='catalog_handlers - pre_checkout_query_catalog'
         )
 
+link = ''
 
-@ catalog_router.message(F.successful_payment.invoice_payload == "subscription")
-async def succsessfull_payment(message: types.Message, bot: Bot):
-    link = await bot.export_chat_invite_link(
-        chat_id=CHAT_ID,
+
+@catalog_router.message(F.successful_payment.invoice_payload == "subscription")
+async def succsessfull_payment(
+    message: types.Message,
+    bot: Bot,
+    state: FSMContext,
+    session: AsyncSession
+):
+    data = await state.get_data()
+    new_user = data.get('new_user')
+
+    await add_new_user_to_db(
+        model=SubscribtionUserData,
+        session=session,
+        user=new_user,
+        bot=bot
     )
-    msg = f'Ссылка на приглашение в группу\n {link}'
-    await message.answer(text=msg, reply_markup=kb_on_start_subscribed)
+    await state.clear()
+    global link
+    link = await bot.create_chat_invite_link(
+        chat_id=CHAT_ID,
+        creates_join_request=True,
+    )
+    await message.answer(text=f'Пожалуйста перейдите по ссылке, \
+что бы подписаться на канал\n {link.invite_link}')
+    await message.answer(
+        text=texts.CATALOG_FINISH_MESSAGE,
+        reply_markup=kb_on_start_subscribed,
+        disable_web_page_preview=True
+    )
 
 
 # к id канала нужно добавить 100 если это будет канал
-@ catalog_router.chat_join_request()
+@catalog_router.message(F.new_chat_members)
 async def succsessfull_chat_join_request(
     message: types.Message,
     bot: Bot,
     session: AsyncSession
 ):
     try:
+        print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
         user: SubscribtionUserData = await get_db_user(
             model=SubscribtionUserData,
             session=session,
@@ -161,10 +170,16 @@ async def succsessfull_chat_join_request(
                 chat_id=CHAT_ID,
                 user_id=user.user_id
             )
+            global link
+            await bot.revoke_chat_invite_link(invite_link=link)
         else:
+            await bot.decline_chat_join_request(
+                chat_id=CHAT_ID,
+                user_id=message.from_user.id
+            )
             await message.answer(
-                text='Что-то пошло не так, для решения данной проблемы пожалуйста\
-                    напишите напишите сюда: ССЫЛКА НА АККАУНТ АДМИНА'
+                text='Что-то пошло не так, для решения данной проблемы пожалуйста \
+напишите напишите сюда: ССЫЛКА НА АККАУНТ АДМИНА'
             )
     except Exception as error:
         await error_service(
