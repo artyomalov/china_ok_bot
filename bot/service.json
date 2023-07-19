@@ -1,0 +1,17 @@
+{
+  "type": "service_account",
+  "project_id": "chinnaokaybot",
+  "private_key_id": "1bdbe01435128e6e7e034ab0dd7ae7b537405b9b",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC+1rRPcnXlsOku\nln5+Qd74misuFBHxUvZlteM0XwLRykQZO2vHiVH3PzhmdXG6GMlPZOzgDXUmtzlM\nKqhScj5E+ZeDwze2bN20CAD4pe+zAnHUye4qkuwsRTnr8gkUiUqwkSBr/Bu0Mecb\n9DqeMdWek3T5DtbumrLd/DcV2L2xI7wPSMdUZMvBloOIgJE9aUra3Ei+nxHa6vB9\njbffzYwK217pLbPl6o1iHIOok64OaJkbW07cLjzpw0ShN2fq85FowSZl6fzmPTEK\n/0HGphjn+IuNgxxNbQCBvGhpk0admqwV/nx+lZtZgzTBLz5zoWFSYdSPTgJtcrRm\nF8DJdbVnAgMBAAECggEAICAztWYe275W2s1h2O5M00vctgKR7K6bJQ8kAuZ1qoxi\nv16l6669uiIN5A2kSgAvL2rdh3Ashwp0HlLWCB8MRX9A1uEPqWmVPt/UDgedHOTt\n9bTSn58hG+jBcetKRQdBqAyeSR9lKIX4ElggYA4imHHZUK4DV6J6Nu1k9owIjt+b\nLNJiXmcv9ynRMowhZPtyTqYcHvg8CzKSGGvokCPEkM7ce4AD+osjOL9MVKjYPQmc\nwxG3CeNBzHjHkzqCQT6/TmwkTmU+TndS56CqRw3ufG3ajT6Y0O0UmeJTFDI1W+7o\nGTauGwsOoPm+hBX80b9iT2lXXKmfa1I8KBtcpBJFKQKBgQDkjSd2kbcFDeeep/h2\nQ54GGEtxFULn2+2AwSFMH2xtpha2FerodVOseiI6a72nxl6HHcdfarbcXV6XzdOB\nyY7fliptUj1URoFjP5rvG3rQl4l/08VQGrE3RB6d5hblPvNYfMbabKx8TqpVDK/M\nn7l9aM5U5cU07q3oQKJbfOkmvwKBgQDVwhFeqimM3nQZEP9gS6xyXZhC8bbGqRvT\nvwW1P+PkhUpg3Fhr5TAIENzrXbxIKSh19iQ3Yqe69UkwTOWcUt1U95nB5MEkriD3\nKDT6Hc3uYMjqfrHnc3DWA/GyvY8psCP3jm65Vqwi/3ftUXlVIV5D19s0byomqJQ+\nRKII5s0DWQKBgBE2sGo1v1saGP/SFtyRay16VvRFbayY2+J+qUtacogvojZEoFSx\nwYOUD0/nHXmtbyEuFP4Sw4MFZUJ5thxoWeJtJPTm5MecJ9KZz8mCgFWFlE2UXaAS\n4pYPA19RHRhXDWz0uOVqmfMi2aFeOz9mKEpRwniSda/u6ho8A/5wAf9xAoGAEmBG\nof6657NQA7+kVKDsyEAnkMm6zsVG8SMg2H4Pl1umE0GeEFh5kpfwhgNe5k0zf0CT\nyHcguD/R9OcHbjLpeB55B2Qk/oRBrT21oDLjuzRy0UXnAWC5OIzKQHVvU0QjM2r5\nNdGvpqqTosE4Tws5UVfDLnTICN7BL8EytNUylrECgYEAu9VeVSsjFY0VYOuzg99Q\nUMi9prlvChT+9OJcfy26zPDBy2Cm1dX/B/MM+DFVHBi4Es6yB44xL3VNkD0q5J0a\nkuYJXjWPgUlDbWN6XpNmGnHviai/844wT4n3ab9MGIUngNYJqSAG5ctxtPmTc/Vx\nl+kZQbPZSaSHrF0iq2pRjSc=\n-----END PRIVATE KEY-----\n",
+  "client_email": "chinnaokaybot@chinnaokaybot.iam.gserviceaccount.com",
+  "client_id": "110802300622519130498",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/chinnaokaybot%40chinnaokaybot.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
+
+
+
+
