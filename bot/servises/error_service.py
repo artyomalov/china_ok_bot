@@ -1,8 +1,7 @@
 __all__=['error_service']
 
 from aiogram import types, Bot
-from const import ADMIN_ID
-
+from config_reader import config
 
 async def error_service(
     error: Exception,
@@ -14,14 +13,14 @@ async def error_service(
     if (type(message) == types.Message or
             type(message) == types.PreCheckoutQuery):
         await bot.send_message(
-            chat_id=ADMIN_ID,
+            chat_id=config.admin_id.get_secret_value(),
             text=err_msg
         )
         await message.answer(text='Что-то пошло не так. \
                                         Пожалуйста, попробуйте позже')
     else:
         await bot.send_message(
-            chat_id=ADMIN_ID,
+            chat_id=config.admin_id.get_secret_value(),
             text=err_msg
         )
         await message.message.answer(text='Что-то пошло не так. \

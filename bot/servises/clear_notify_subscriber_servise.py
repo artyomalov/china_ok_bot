@@ -7,7 +7,7 @@ from sqlalchemy import select, delete
 from db.models import SubscribtionUserData
 from const import ONE_DAY_IN_SECONDS
 from sqlalchemy.ext.asyncio import async_sessionmaker
-
+from config_reader import config
 
 async def clear_notify_subscriber_servise(
     bot: Bot,
@@ -24,7 +24,8 @@ async def clear_notify_subscriber_servise(
             result = await session.execute(stmt)
             for subscriber in result.scalars():
                 member = await bot.get_chat_member(
-                    chat_id=-1001934317046,
+                    chat_id=config.chat_id.get_secret_value(),
+
                     user_id=subscriber.user_id)
                 if (
                         member.status == 'administrator'
@@ -35,11 +36,11 @@ async def clear_notify_subscriber_servise(
                     req = delete(SubscribtionUserData).filter_by(
                         user_id=subscriber.user_id)
                     await bot.ban_chat_member(
-                        chat_id=-1001934317046,
+                        chat_id=config.chat_id.get_secret_value(),
                         user_id=subscriber.user_id
                     )
                     await bot.unban_chat_member(
-                        chat_id=-1001934317046,
+                        chat_id=config.chat_id.get_secret_value(),
                         user_id=subscriber.user_id
                     )
                     await bot.send_message(

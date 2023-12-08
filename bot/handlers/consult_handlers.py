@@ -19,12 +19,15 @@ from servises.error_service import error_service
 from servises.get_time_service import get_time
 from servises.send_invoice_service import send_invoice_handler
 from servises.select_kb_service import select_kb_service
-
+from const import ALLOWED_PHONE_NUMBER_SYMBOLS
 
 consult_router = Router()
 
 
 class FSMFormConsult(StatesGroup):
+    name = State()
+    phone_number = State()
+    email = State()
     question_description = State()
     consultation_type = State()
 
@@ -63,7 +66,7 @@ async def restart_main_menu(
 async def base_consult_handler(
     message: types.Message,
     state: FSMContext,
-    ):
+):
     '''
     Returns base consult description and two inline buttons:
     button_base_consult, product_selection_consult
@@ -145,16 +148,19 @@ async def send_invoice(
     token = f'{provider_token[0]}'
 
     if data.get('consultation_type') == 'base_consult':
-        await send_invoice_handler(
-            callback_chat_id=callback.from_user.id,
-            bot=bot,
-            title='Базовая консультация',
-            description='Заказ базовой консультации',
-            payload='consult',
-            token=token,
-            label_data='Базовая консультация',
-            amount=30000
-        )
+        await state.set_state(FSMFormConsult.name)
+        await callback.message.answer(text='Пожалуйста, укажите имя')
+        await callback.answer()
+        # await send_invoice_handler(
+        #     callback_chat_id=callback.from_user.id,
+        #     bot=bot,
+        #     title='Базовая консультация',
+        #     description='Заказ базовой консультации',
+        #     payload='consult',
+        #     token=token,
+        #     label_data='Базовая консультация',
+        #     amount=30000
+        # )
 
     else:
         await send_invoice_handler(
@@ -167,6 +173,50 @@ async def send_invoice(
             label_data='Подбор товара',
             amount=500000
         )
+        await callback.answer()
+
+
+@consult_router.message(FSMFormConsult.name)
+async def base_consult_get_name(
+    message: types.Message,
+    state: FSMContext
+):
+    await state.update_data(name=message.text)
+    await message.answer(text='Пожалуйста укажите номер телефона')
+    await state.set_state(FSMFormConsult.phone_number)
+
+
+@consult_router.message(FSMFormConsult.phone_number)
+async def base_consult_get_phone_number(
+    message: types.Message,
+    state: FSMContext,
+):
+    if (set(message.text).issubset(ALLOWED_PHONE_NUMBER_SYMBOLS)
+            or set(message.text) == ALLOWED_PHONE_NUMBER_SYMBOLS):
+        await state.update_data(phone_number=message.text)
+        await message.answer(text='Пожалуйста укажите имэйл')
+        await state.set_state(FSMFormConsult.email)
+    else:
+        await message.answer(text='Номер телефона может состоять из цифр\
+                              "0-9", круглых скобок() и знака "+"')
+
+
+@consult_router.message(FSMFormConsult.email)
+async def base_consult_get_email(
+    message: types.Message,
+    state: FSMContext,
+):
+    await state.update_data(email=message.text)
+    data = await state.get_data()
+
+    time = get_time()
+    send_data = [time]
+    for item in data.values():
+        send_data.append(item)
+    print([send_data], '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+    add_data_to_gsheets(range='orders!A1:F1', send_data=send_data)
+    await state.clear()
+    await message.answer(text=texts.FINISH_CONSULT_MESSAGE)
 
 
 @consult_router.pre_checkout_query(F.invoice_payload == "consult")
@@ -187,6 +237,7 @@ async def pre_checkout_query(
             'question_description',
             'Нет описания'
         )
+        consultation_type = data.get('consultation_type', None)
         time = get_time()
         send_data = [[
             time,
@@ -194,6 +245,7 @@ async def pre_checkout_query(
             pre_checkout_query.order_info.phone_number,
             pre_checkout_query.order_info.email,
             question_description,
+            consultation_type,
         ]]
         add_data_to_gsheets(range='orders!A1:E1', send_data=send_data)
         await state.clear()

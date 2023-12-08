@@ -1,6 +1,7 @@
 import time
 import texts
 import servises
+from config_reader import config
 from aiogram import types, Bot, F
 from aiogram import Router
 from aiogram.filters import Text
@@ -89,7 +90,7 @@ async def start_fill_form_callback_fsm(
 ):
     try:
         member = await bot.get_chat_member(
-            chat_id=-1001934317046,
+            chat_id=config.chat_id.get_secret_value(),
             user_id=callback.from_user.id)
 
         user: ApplicationFormUserData = await get_db_user(
@@ -171,12 +172,14 @@ async def set_name_fsm(message: types.Message, state: FSMContext):
 
 @form_router.message(FSMForm.phone_number)
 async def set_phone_number_fsm(message: types.Message, state: FSMContext):
-    if set(message.text).issubset(ALLOWED_PHONE_NUMBER_SYMBOLS) or set(message.text) == ALLOWED_PHONE_NUMBER_SYMBOLS:
+    if (set(message.text).issubset(ALLOWED_PHONE_NUMBER_SYMBOLS)
+            or set(message.text) == ALLOWED_PHONE_NUMBER_SYMBOLS):
         await state.update_data(phone_number=message.text)
         await message.answer('Наименование интересующего товара:', reply_markup=kb_cancel)
         await state.set_state(FSMForm.product_name)
     else:
-        await message.answer('номер телефона может состоять из цифр "0-9", круглых скобок() и знака "+"')
+        await message.answer('Номер телефона может состоять из цифр\
+                              "0-9", круглых скобок() и знака "+"')
 
 
 @form_router.message(FSMForm.product_name)
@@ -377,7 +380,7 @@ async def send_data_to_google_sheets(
         kb = await servises.select_kb_service(session=session, id=id)
         time = servises.get_time()
         member = await bot.get_chat_member(
-            chat_id=-1001934317046,
+            chat_id=config.chat_id.get_secret_value(),
             user_id=callback.from_user.id)
         data = await state.get_data()
         send_data = []

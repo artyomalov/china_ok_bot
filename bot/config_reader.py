@@ -6,7 +6,9 @@ class Settings(BaseSettings):
     db_url: PostgresDsn
     sample_spreadsheet_id: SecretStr
     payment_token: SecretStr
-    
+    chat_id: SecretStr
+    admin_id: SecretStr
+
     class Config:
         env_file = '.env'
         env_file_encoding = 'utf-8'

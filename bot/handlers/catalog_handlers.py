@@ -8,11 +8,12 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from keyboards.catalog_keyboard import kb_subscribe
 from keyboards.startup_keyboard import kb_on_start_subscribed
-from const import BOGDAN_ID, CHAT_ID
 from servises.send_invoice_service import send_invoice_handler
 from config_reader import config
 from db.models import SubscribtionUserData
 from db.db_actions import add_new_user_to_db
+
+
 catalog_router = Router()
 
 
@@ -143,7 +144,7 @@ async def succsessfull_payment(
     )
     expire_date = datetime.datetime.now() + datetime.timedelta(days=1)
     link = await bot.create_chat_invite_link(
-        chat_id=CHAT_ID,
+        chat_id=config.chat_id.get_secret_value(),
         expire_date=expire_date,
         member_limit=1,
     )
@@ -159,12 +160,11 @@ async def succsessfull_payment(
     )
 
 
-# к id канала нужно добавить 100 если это будет канал
 @catalog_router.message(F.new_chat_members)
 async def succsessfull_chat_join_request(
     message: types.Message,
     bot: Bot,
 ):
     user_name = message.from_user.username
-    await bot.send_message(chat_id=BOGDAN_ID, text=f'Новый подписчик в \
+    await bot.send_message(chat_id=config.admin_id.get_secret_value(), text=f'Новый подписчик в \
 платном канале. \n{user_name}')

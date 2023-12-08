@@ -1,9 +1,9 @@
 from aiogram import Bot
-from const import ADMIN_ID
 from db.models import SubscribtionUserData
 from sqlalchemy import select, insert, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import ApplicationFormUserData, SubscribtionUserData
+from config_reader import config
 
 
 async def get_db_user(model: ApplicationFormUserData | SubscribtionUserData,
@@ -33,7 +33,7 @@ async def add_new_user_to_db(
         await session.commit()
     except Exception as error:
         print(error)
-        await bot.send_message(id=ADMIN_ID, text=error)
+        await bot.send_message(id=config.admin_id.get_secret_value(), text=error)
         return error
 
 
@@ -53,7 +53,7 @@ async def delete_user_from_db(
         await session.commit()
     except Exception as error:
         print(error)
-        await bot.send_message(id=ADMIN_ID, text=error)
+        await bot.send_message(id=config.admin_id.get_secret_value(), text=error)
         return error
 
 
@@ -77,5 +77,5 @@ async def update_user_fill_form_count(
         await session.commit()
     except Exception as error:
         print(error)
-        await bot.send_message(id=ADMIN_ID, text=error)
+        await bot.send_message(id=config.admin_id.get_secret_value(), text=error)
         return error
